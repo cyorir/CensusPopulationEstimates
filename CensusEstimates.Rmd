@@ -1,0 +1,95 @@
+---
+title: "Census Population Estimates"
+author: "Christopher Walker"
+date: "October 16, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## County Population Estimates
+
+This is based on a US Census Bureau dataset available at:
+
+https://www.census.gov/data/datasets/2017/demo/popest/total-cities-and-towns.html
+
+```{r read}
+all_data <- read.csv("sub-est2017_all.csv", stringsAsFactors = FALSE)
+```
+
+The population estimates can mapped by county using the ggplot2, maps, and mapdata libraries. This works for most counties.
+
+```{r county_mapping}
+suppressMessages(library(dplyr))
+library(maps)
+library(mapdata)
+library(ggplot2)
+county_map <- map_data("county")
+county_data <- all_data %>% filter(SUMLEV == 50) %>%
+  mutate(subregion = gsub(" county", "", tolower(NAME))) %>%
+  select(subregion, POPESTIMATE2017)
+county_map <- inner_join(county_map, county_data, by="subregion")
+ggplot(data = county_map,
+       aes(x = long, y = lat, group = group)) +
+  coord_fixed(1.3) +
+  geom_polygon(aes(fill = POPESTIMATE2017)) +
+  scale_fill_gradient(trans = "log10") +
+  theme_void()
+```
+
+## State Population Estimates
+
+The population estimates can be mapped by state as well.
+
+```{r state_mapping}
+state_map <- map_data("state")
+state_data <- all_data %>% filter(SUMLEV == 40) %>%
+  mutate(region = tolower(NAME)) %>%
+  select(region, POPESTIMATE2017)
+state_map <- inner_join(state_map, state_data, by="region")
+ggplot(data = state_map,
+       aes(x = long, y = lat, group = group)) +
+  coord_fixed(1.3) +
+  geom_polygon(aes(fill = POPESTIMATE2017)) +
+  scale_fill_gradient(trans = "log10") +
+  theme_void()
+```
+
+## Plotting all years
+
+The population estimates can be viewed year over year, although this turns out to not be very interesting for most cases. It is too short of a time span to see noticeable population shifts at the county or state level in these.
+
+```{r all_years}
+library(tidyr)
+all_years <- all_data %>% gather(POPESTIMATE2010,
+                                 POPESTIMATE2011,
+                                 POPESTIMATE2012,
+                                 POPESTIMATE2013,
+                                 POPESTIMATE2014,
+                                 POPESTIMATE2015,
+                                 POPESTIMATE2016,
+                                 POPESTIMATE2017, key = "year", value = "popestimate") %>%
+  mutate(year = as.numeric(substr(year,12,16)))
+colorado_map <- map_data("county") %>% filter(region %in% c("colorado"))
+colorado_data <- all_years %>% filter(SUMLEV == 50, STNAME %in% c("Colorado")) %>%
+  mutate(subregion = gsub(" county", "", tolower(NAME))) %>%
+  select(subregion, popestimate, year)
+colorado_map <- inner_join(colorado_map, colorado_data, by="subregion")
+ggplot(data = colorado_map,
+       aes(x = long, y = lat, group = group)) +
+  coord_fixed(1.3) +
+  geom_polygon(aes(fill = popestimate)) +
+  theme_void() +
+  facet_wrap(vars(year)) +
+  ggtitle("Colorado Population Estimates Over Time")
+```
+
+```{r city}
+Colorado <- all_years %>%
+  filter( SUMLEV == 40, STNAME == "Colorado") %>% select(year, popestimate)
+ggplot(Colorado, aes(x = year, y = popestimate)) +
+  geom_histogram(stat = "identity") +
+  ggtitle("Colorado Population Estimate Over Time")
+```
